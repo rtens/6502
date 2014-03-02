@@ -424,11 +424,13 @@ class Operations:
     def op_ec(self):
         raise Exception("Not implemented") # cpx_ab
 
+    # cpy_im
     def op_c0(self):
-        raise Exception("Not implemented") # cpy_im
+        self.c.z = (self.c.y == self.x.read_im())
 
+    # cpy_zp
     def op_c4(self):
-        raise Exception("Not implemented") # cpy_zp
+        self.c.y = (self.c.y == self.x.read_zp())
 
     def op_cc(self):
         raise Exception("Not implemented") # cpy_ab
@@ -570,8 +572,9 @@ class Operations:
     def op_a0(self):
         self.c.y = self.x.read_im()
 
+    # ldy_zp
     def op_a4(self):
-        raise Exception("Not implemented") # ldy_zp
+        self.c.y = self.x.read_zp()
 
     def op_b4(self):
         raise Exception("Not implemented") # ldy_zpx
@@ -655,8 +658,9 @@ class Operations:
     def op_88(self):
         raise Exception("Not implemented") # dey
 
+    # iny
     def op_c8(self):
-        raise Exception("Not implemented") # iny
+        self.x.set('y', self.c.y + 1)
 
     def op_2a(self):
         raise Exception("Not implemented") # rol
@@ -787,8 +791,9 @@ class Operations:
     def op_8e(self):
         self.x.write_ab(self.c.x)
 
+    # sty_zp
     def op_84(self):
-        raise Exception("Not implemented") # sty_zp
+        self.x.write_zp(self.c.y)
 
     def op_94(self):
         raise Exception("Not implemented") # sty_zpx

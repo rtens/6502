@@ -1,5 +1,8 @@
+import threading
 import tkinter as tk
 import random
+import time
+
 
 class RandomNumberGenerator:
 
@@ -18,10 +21,8 @@ class BitmapDisplay:
         self.height = height
         self.last_key = 0
 
-        self.top = tk.Tk()
-        self.top.bind_all('<Key>', self.key_pressed)
-        self.canvas = tk.Canvas(self.top, width=width * pixel_size, height=height * pixel_size, background="black")
-        self.canvas.pack()
+        self.buffer = []
+        threading.Thread(target=self.update).start()
 
         self.colors = [
             "black",
@@ -42,6 +43,28 @@ class BitmapDisplay:
             "light gray"
         ]
 
+    def update(self):
+        top = tk.Tk()
+        top.bind_all('<Key>', self.key_pressed)
+        canvas = tk.Canvas(top, width=self.width * self.pixel_size, height=self.height * self.pixel_size, background="black")
+        canvas.pack()
+
+        while True:
+            while len(self.buffer) != 0:
+                what, where = self.buffer.pop()
+
+                offset = where - self.start_address
+                x = offset % self.width
+                y = int((offset - x) / self.width)
+                xp = x * self.pixel_size
+                yp = y * self.pixel_size
+
+                canvas.create_rectangle(xp, yp, xp + self.pixel_size, yp + self.pixel_size,
+                                             fill=self.colors[what % 0xf], width=0)
+
+            top.update()
+            time.sleep(0.01)
+
     def key_pressed(self, e):
         self.last_key = e.keycode
 
@@ -51,19 +74,8 @@ class BitmapDisplay:
             controller.vmem[a] = self
         controller.vmem[0xff] = self
 
-    def stay(self):
-        self.top.mainloop()
-
     def write(self, what, where):
-        offset = where - self.start_address
-        x = offset % self.width
-        y = int((offset - x) / self.width)
-        xp = x * self.pixel_size
-        yp = y * self.pixel_size
-
-        self.canvas.create_rectangle(xp, yp, xp + self.pixel_size, yp + self.pixel_size,
-                                     fill=self.colors[what % 0xf], width=0)
-        self.top.update()
+        self.buffer.insert(0, (what, where))
 
     def read(self, where):
         return self.last_key
