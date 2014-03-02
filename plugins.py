@@ -22,7 +22,9 @@ class BitmapDisplay:
         self.last_key = 0
 
         self.buffer = []
-        threading.Thread(target=self.update).start()
+        self.running = True
+        self.thread = threading.Thread(target=self.update)
+        self.thread.start()
 
         self.colors = [
             "black",
@@ -45,11 +47,12 @@ class BitmapDisplay:
 
     def update(self):
         top = tk.Tk()
+        top.protocol("WM_DELETE_WINDOW", self.stop)
         top.bind_all('<Key>', self.key_pressed)
         canvas = tk.Canvas(top, width=self.width * self.pixel_size, height=self.height * self.pixel_size, background="black")
         canvas.pack()
 
-        while True:
+        while self.running:
             while len(self.buffer) != 0:
                 what, where = self.buffer.pop()
 
@@ -64,6 +67,9 @@ class BitmapDisplay:
 
             top.update()
             time.sleep(0.01)
+
+    def stop(self):
+        self.running = False
 
     def key_pressed(self, e):
         self.last_key = e.keycode
