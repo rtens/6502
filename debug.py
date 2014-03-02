@@ -43,9 +43,4 @@ class Debugger(controller.Controller):
 
 if __name__ == '__main__':
     c = Debugger()
-
-
-    d = plugins.BitmapDisplay(32, 32, 10)
-    d.register(c, 0x0200)
-
     c.debug(open(sys.argv[1], 'r').read())

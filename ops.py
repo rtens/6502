@@ -212,12 +212,15 @@ class Addressing:
         self.c.sp += 1
         return self.c.mem_read(self.c.stack_top + self.c.sp)
 
-    def set(self, reg, what):
+    def result(self, what):
         self.c.v = what >= 0x80
         what = self.bcd(what % 0x100)
         self.c.z = what == 0
         self.c.n = what > 0x80
-        setattr(self.c, reg, what)
+        return what
+
+    def set(self, reg, what):
+        setattr(self.c, reg, self.result(what))
 
     def read_two_bytes(self, address):
         return self.join_bytes([self.c.mem_read(address), self.c.mem_read(address + 1)])
@@ -499,7 +502,7 @@ class Operations:
     # inc_zp
     def op_e6(self):
         address = self.x.read_im()
-        self.c.mem_write(self.c.mem_read(address) + 1, address)
+        self.c.mem_write(self.x.result(self.c.mem_read(address) + 1), address)
 
     def op_f6(self):
         raise Exception("Not implemented") # inc_zpx
