@@ -9,6 +9,7 @@ class Debugger(controller.Controller):
         super().__init__(mem_size, pc, stack_top)
         self.break_line = None
 
+        self.running = True
         self.thread = threading.Thread(target=self.print)
         self.thread.start()
 
@@ -16,7 +17,7 @@ class Debugger(controller.Controller):
         self.instruction_count = 0
 
     def print(self):
-        while True:
+        while self.running:
             while self.break_line != -1:
                 time.sleep(0.1)
 
@@ -39,7 +40,12 @@ class Debugger(controller.Controller):
             i = input('\n\n\n\nContinue?')
             self.break_line = int(i) - 1 if len(i) > 0 else None
 
-        super().exec(op_code)
+        try:
+            super().exec(op_code)
+        except Exception as e:
+            self.print_info()
+            self.running = False
+            raise e
 
     def print_info(self):
         os.system('cls' if os.name == 'nt' else 'clear')
