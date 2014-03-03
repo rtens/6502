@@ -15,6 +15,11 @@ program instruction by instruction.
 
     python run.py <source_file> [debug]
 
+## Work in Progress ##
+
+The emulator is far from being complete. The most important instructions are implemented, but
+many are still missing.
+
 ### Acknowledgement ###
 
 I took the snake program from the [tutorial] and part of the test suite from [py65].
