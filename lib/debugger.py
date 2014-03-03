@@ -1,22 +1,24 @@
 import threading
 import time
-import assembler, controller, sys, os, plugins
+import os
+import msvcrt
+
+from lib import assembler, controller
+
 
 class Debugger(controller.Controller):
-
-
     def __init__(self, mem_size=0xFFFF, pc=0x0600, stack_top=0x0100):
         super().__init__(mem_size, pc, stack_top)
         self.break_line = None
 
         self.running = True
-        self.thread = threading.Thread(target=self.print)
+        self.thread = threading.Thread(target=self.keep_running)
         self.thread.start()
 
         self.timer = time.time()
         self.instruction_count = 0
 
-    def print(self):
+    def keep_running(self):
         while self.running:
             while self.break_line != -1:
                 time.sleep(0.1)
@@ -27,8 +29,11 @@ class Debugger(controller.Controller):
 
             os.system('cls' if os.name == 'nt' else 'clear')
             print('Running with %.2f Hz' % frequency)
+            print('(hit any key to break)')
             time.sleep(1)
 
+            if msvcrt.kbhit():
+                self.break_line = None
 
 
     def exec(self, op_code):
@@ -37,7 +42,7 @@ class Debugger(controller.Controller):
 
         if self.break_line is None or self.break_line == line:
             self.print_info()
-            i = input('\n\n\n\nContinue?')
+            i = input('\n\n\n\nContinue (to line)? ')
             self.break_line = int(i) - 1 if len(i) > 0 else None
 
         try:
@@ -53,7 +58,7 @@ class Debugger(controller.Controller):
         line = self.assembler.lines[self.pc - 1]
         print(str(line + 1) + ': ' + self.program_lines[line])
 
-        print("%02x"%self.pc + ': ' + ' '.join(['%02x'%i for i in self.mem[self.pc - 1:self.pc + 3]]) + ' ...')
+        print("%02x" % self.pc + ': ' + ' '.join(['%02x' % i for i in self.mem[self.pc - 1:self.pc + 3]]) + ' ...')
 
         print([
             "SP: %02x" % self.sp,
@@ -73,15 +78,10 @@ class Debugger(controller.Controller):
 
         print("")
         for i in range(0, 0x100, 16):
-            print('%04x'%i + ': ' + ' '.join(['%02x'%i for i in self.mem[i:i + 16]]))
+            print('%04x' % i + ': ' + ' '.join(['%02x' % i for i in self.mem[i:i + 16]]))
 
     def debug(self, program):
         self.program_lines = program.split('\n')
         self.assembler = assembler.Assembler()
 
         self.run(self.assembler.assemble(program))
-
-
-if __name__ == '__main__':
-    c = Debugger()
-    c.debug(open(sys.argv[1], 'r').read())

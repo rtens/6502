@@ -1,5 +1,4 @@
-import time
-import ops
+from lib import ops
 
 
 class Controller:

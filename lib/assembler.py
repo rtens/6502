@@ -1,4 +1,4 @@
-import ops
+from lib import ops
 
 
 class Assembler:

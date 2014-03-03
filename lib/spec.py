@@ -1,6 +1,6 @@
 import unittest
-from controller import Controller
-from assembler import Assembler
+from lib.controller import Controller
+from lib.assembler import Assembler
 
 
 class ControllerTest(unittest.TestCase):

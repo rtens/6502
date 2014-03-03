@@ -1,0 +1,21 @@
+lda #$02
+sta $01
+lda #$85
+sta $00
+
+loop:
+    lda #0
+    sta ($00),y
+    iny
+    tya
+    sta ($00),y
+    nop
+    cmp #$0f
+    bne doLoop
+    ldy #0
+doLoop:
+    nop
+    nop
+    sty $fd
+    stx $fd
+    jmp loop
