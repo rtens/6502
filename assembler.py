@@ -34,48 +34,53 @@ class Assembler:
             self.labels[op[:-1]] = pc
             return []
         elif op in ops.mnemonics:
-            return [ops.op_codes[op]]
+            return [ops.op_codes[(op, None)]]
         else:
             return self.op_with_arg(op, lexer.next(), pc)
 
     def op_with_arg(self, op, arg, pc):
+        mode = None
         if arg[0] == '#':
             if arg[1] == '$':
-                arg = [int(arg[2:4], 16)]
+                args = [int(arg[2:4], 16)]
             else:
-                arg = [int(arg[1:])]
-            op += '_im'
+                args = [int(arg[1:])]
+            mode = 'im'
         elif arg[0] == "(":
             if 'x' in arg:
-                op += '_inx'
+                mode = 'inx'
             elif 'y' in arg:
-                op += '_iny'
+                mode = 'iny'
             else:
-                op += '_in'
-            arg = [int(arg[2:4], 16)]
+                mode += 'in'
+            args = [int(arg[2:4], 16)]
         elif ',' in arg:
             if len(arg) == 5:
-                op += '_zp' + arg[-1]
-                arg = [int(arg[1:3], 16)]
+                mode = 'zp' + arg[-1]
+                args = [int(arg[1:3], 16)]
             else:
-                op += '_ab' + arg[-1]
-                arg = [int(arg[3:5], 16), int(arg[1:3], 16)]
+                mode = 'ab' + arg[-1]
+                args = [int(arg[3:5], 16), int(arg[1:3], 16)]
         elif arg[0] == '$':
             if len(arg) == 5:
-                arg = [int(arg[3:5], 16), int(arg[1:3], 16)]
-                op += '_ab'
+                args = [int(arg[3:5], 16), int(arg[1:3], 16)]
+                mode = 'ab'
             else:
-                arg = [int(arg[1:3], 16)]
-                op += '_zp'
+                args = [int(arg[1:3], 16)]
+                mode = 'zp'
+        elif arg == 'a':
+            args = []
+            mode = 'a'
         else:
+            mode = ''
             if op in ['jmp', 'jsr']:
                 self.absolutes.append(pc + 1)
-                arg = [arg, arg]
+                args = [arg, arg]
             else:
                 self.relatives.append(pc + 1)
-                arg = [arg]
+                args = [arg]
 
-        return [ops.op_codes[op]] + arg
+        return [ops.op_codes[(op, mode)]] + args
 
     @staticmethod
     def _signed(a):

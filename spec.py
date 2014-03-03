@@ -124,7 +124,7 @@ class OperationsTest(unittest.TestCase):
         self.assertEqual(c.a, 27)
 
     def test_lsr(self):
-        c = self.x('LDA #$03 LSR')
+        c = self.x('LDA #$03 LSR A')
         self.assertEqual(c.a, 1)
         self.assertEqual(c.c, True)
 

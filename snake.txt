@@ -169,13 +169,13 @@ updateloop:
   bpl updateloop
 
   lda $02
-  lsr
+  lsr a
   bcs up
-  lsr
+  lsr a
   bcs right
-  lsr
+  lsr a
   bcs down
-  lsr
+  lsr a
   bcs left
 up:
   lda $10
