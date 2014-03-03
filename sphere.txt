@@ -17,7 +17,7 @@ mainLoop:
  tax
  inx
  txa
- stx $01ff
+ stx $f0
 
 ; Now we loop over the entire screen
 loop:

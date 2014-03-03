@@ -61,6 +61,7 @@ loop:
   jsr drawApple
   jsr drawSnake
   jsr spinWheels
+  sta $f0
   jmp loop
 
 

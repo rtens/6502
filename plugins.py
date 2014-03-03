@@ -34,8 +34,9 @@ class Out:
 
 
 class BitmapDisplay:
-    def __init__(self, width, height, pixel_size=10, triggered=False):
+    def __init__(self, width, height, pixel_size=10):
         self.start_address = 0
+        self.flush_trigger = 0
         self.pixel_size = pixel_size
         self.width = width
         self.height = height
@@ -50,9 +51,8 @@ class BitmapDisplay:
         self.pixels = {}
 
         self.buffer = []
-        self.running = not triggered
+        self.running = True
         self.thread = threading.Thread(target=self.update)
-        self.thread.start()
 
         self.colors = [
             "black",
@@ -76,12 +76,9 @@ class BitmapDisplay:
     def update(self):
         while self.running:
             self.flush()
-            time.sleep(0.01)
 
     def flush(self):
-        start = time.time()
-        size = len(self.buffer)
-        while len(self.buffer) != 0:
+        while self.running and len(self.buffer) != 0:
             what, where = self.buffer.pop()
             self.canvas.itemconfig(self.pixels[where], fill=self.colors[what % 0x10])
 
@@ -89,17 +86,21 @@ class BitmapDisplay:
 
     def stop(self):
         self.running = False
+        self.top.destroy()
 
     def key_pressed(self, e):
         self.last_key = e.keycode
 
-    def register(self, controller, start_address):
+    def register(self, controller, start_address, key_reader=None, flush_trigger=None):
         self.start_address = start_address
+        self.flush_trigger = flush_trigger
+
         for a in range(start_address, start_address + self.width * self.height):
             controller.vmem[a] = self
-        controller.vmem[0xff] = self
-        if not self.running:
-            controller.vmem[start_address - 1] = self
+        if key_reader is not None:
+            controller.vmem[key_reader] = self
+        if flush_trigger is not None:
+            controller.vmem[flush_trigger] = self
 
         for offset in range(0, self.width * self.height):
             x = offset % self.width
@@ -111,14 +112,19 @@ class BitmapDisplay:
                                                  fill='black', width=0)
             self.pixels[self.start_address + offset] = pixel
 
+        self.thread.start()
+
 
     def write(self, what, where):
-        if where == self.start_address - 1:
+        if not self.running:
+            return
+
+        if where == self.flush_trigger:
             self.flush()
         else:
             self.buffer.insert(0, (what, where))
 
-        if self.running and len(self.buffer) > self.width:
+        if not self.flush_trigger and len(self.buffer) > self.width:
             self.flush()
             self.top.update()
 
