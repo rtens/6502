@@ -607,7 +607,7 @@ class Operations:
 
     # nop
     def op_ea(self):
-        time.sleep(0.001)
+        time.sleep(0.01)
 
     def op_09(self):
         raise Exception("Not implemented") # ora_im
@@ -655,8 +655,9 @@ class Operations:
     def op_a8(self):
         raise Exception("Not implemented") # tay
 
+    # tya
     def op_98(self):
-        raise Exception("Not implemented") # tya
+        self.c.a = self.c.y
 
     def op_88(self):
         raise Exception("Not implemented") # dey
@@ -784,8 +785,9 @@ class Operations:
     def op_28(self):
         raise Exception("Not implemented") # plp
 
+    # stx_zp
     def op_86(self):
-        raise Exception("Not implemented") # stx_zp
+        self.x.write_zp(self.c.x)
 
     def op_96(self):
         raise Exception("Not implemented") # stx

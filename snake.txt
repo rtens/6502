@@ -238,7 +238,7 @@ drawSnake:
 
 
 spinWheels:
-  ldx #100
+  ldx #10
 spinloop:
   nop
   dex
