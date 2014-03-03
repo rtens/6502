@@ -1,3 +1,4 @@
+import time
 import ops
 
 
@@ -41,12 +42,12 @@ class Controller:
             self.pc += 1
 
             if op_code == 0:
-                return
+                break
 
             self.exec(op_code)
 
     def exec(self, op_code):
-        getattr(self.ops, 'op_' + hex(op_code)[2:])()
+        self.ops.exec(op_code)
 
     def mem_write(self, what, where):
         if where in self.vmem:

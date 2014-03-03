@@ -1,3 +1,4 @@
+import inspect
 import time
 
 op_codes = {
@@ -24,14 +25,14 @@ op_codes = {
     ('asl', 'abx'): 0x1E,
     ('bit', 'zp'): 0x24,
     ('bit', 'ab'): 0x2C,
-    ('bpl', ''): 0x10,
-    ('bmi', ''): 0x30,
-    ('bvc', ''): 0x50,
-    ('bvs', ''): 0x70,
-    ('bcc', ''): 0x90,
-    ('bcs', ''): 0xB0,
-    ('bne', ''): 0xD0,
-    ('beq', ''): 0xF0,
+    ('bpl', 'im'): 0x10,
+    ('bmi', 'im'): 0x30,
+    ('bvc', 'im'): 0x50,
+    ('bvs', 'im'): 0x70,
+    ('bcc', 'im'): 0x90,
+    ('bcs', 'im'): 0xB0,
+    ('bne', 'im'): 0xD0,
+    ('beq', 'im'): 0xF0,
     ('brk', None): 0x00,
     ('cmp', 'im'): 0xC9,
     ('cmp', 'zp'): 0xC5,
@@ -70,9 +71,9 @@ op_codes = {
     ('inc', 'zpx'): 0xF6,
     ('inc', 'ab'): 0xEE,
     ('inc', 'abx'): 0xFE,
-    ('jmp', ''): 0x4C,
+    ('jmp', 'ab'): 0x4C,
     ('jmp', 'in'): 0x6C,
-    ('jsr', ''): 0x20,
+    ('jsr', 'ab'): 0x20,
     ('lda', 'im'): 0xA9,
     ('lda', 'zp'): 0xA5,
     ('lda', 'zpx'): 0xB5,
@@ -157,6 +158,7 @@ op_codes = {
 instructions = dict([(op_codes[i], i) for i in op_codes])
 mnemonics = [i for i, a in op_codes if a is None]
 
+
 class Addressing:
     def __init__(self, controller):
         self.c = controller
@@ -192,15 +194,16 @@ class Addressing:
         self.c.n = what > 0x80
         return what
 
-    def set(self, reg, what):
-        setattr(self.c, reg, self.result(what))
-
     def read_two_bytes(self, address):
         return self.join_bytes([self.c.mem_read(address), self.c.mem_read(address + 1)])
 
     def read_im(self):
         self.c.pc += 1
         return self.c.mem_read(self.c.pc - 1)
+
+    def read_double_im(self):
+        self.c.pc += 2
+        return self.read_two_bytes(self.c.pc - 2)
 
     def read_zp(self):
         return self.c.mem_read(self.read_im())
@@ -214,21 +217,17 @@ class Addressing:
     def write_zpx(self, what):
         self.c.mem_write(what, (self.read_im() + self.c.x) % 0xff)
 
-    def read_double_arg(self):
-        self.c.pc += 2
-        return self.read_two_bytes(self.c.pc - 2)
-
     def read_ab(self):
-        return self.c.mem_read(self.read_double_arg())
+        return self.c.mem_read(self.read_double_im())
 
     def write_ab(self, what):
-        self.c.mem_write(what, self.read_double_arg())
+        self.c.mem_write(what, self.read_double_im())
 
     def write_abx(self, what):
-        self.c.mem_write(what, self.read_double_arg() + self.c.x)
+        self.c.mem_write(what, self.read_double_im() + self.c.x)
 
     def write_aby(self, what):
-        self.c.mem_write(what, self.read_double_arg() + self.c.y)
+        self.c.mem_write(what, self.read_double_im() + self.c.y)
 
     def write_inx(self, what):
         self.c.mem_write(what, self.read_two_bytes(self.read_im() + self.c.x))
@@ -242,539 +241,208 @@ class Operations:
         self.c = controller
         self.x = Addressing(controller)
 
+    def exec(self, op_code):
+        inst, mode = instructions[op_code]
+        inst_method = getattr(self, 'inst_' + inst)
+        args = inspect.getargspec(inst_method).args
+
+        if mode is None or len(args) == 1:
+            result = inst_method()
+        else:
+            arg = getattr(self.x, 'read_' + mode)()
+            result = inst_method(arg)
+
+        if result is not None:
+            getattr(self.x, 'write_' + mode)(result)
+
+    def inst_adc(self, arg):
+        result = self.c.a + arg + (1 if self.c.c else 0)
+        self.c.c = result > 0xff
+        self.c.a = self.x.result(result)
+
+    def inst_and(self, arg):
+        self.c.a = self.c.a & arg
+
+    def inst_asl(self):
+        raise Exception('Not implemented')
+
     def branch(self, condition):
         if condition:
             self.c.pc += self.x.signed(self.x.read_im())
         self.c.pc += 1
 
-    def adc(self, what):
-        result = self.c.a + what + (1 if self.c.c else 0)
-        self.c.c = result > 0xff
-        self.x.set('a', result)
-
-    # adc_im
-    def op_69(self):
-        self.adc(self.x.read_im())
-
-    # adc_zp
-    def op_65(self):
-        self.adc(self.x.read_zp())
-
-    def op_75(self):
-        raise Exception("Not implemented") # adc_zpx
-
-    # adc_ab
-    def op_6d(self):
-        self.adc(self.x.read_ab())
-
-    def op_7d(self):
-        raise Exception("Not implemented") # adc_abx
-
-    def op_79(self):
-        raise Exception("Not implemented") # adc_aby
-
-    def op_61(self):
-        raise Exception("Not implemented") # adc_inx
-
-    def op_71(self):
-        raise Exception("Not implemented") # adc_iny
-
-    # and_im
-    def op_29(self):
-        self.c.a = self.c.a & self.x.read_im()
-
-    def op_25(self):
-        raise Exception("Not implemented") # and_zp
-
-    def op_35(self):
-        raise Exception("Not implemented") # and_zpx
-
-    def op_2d(self):
-        raise Exception("Not implemented") # and_ab
-
-    def op_3d(self):
-        raise Exception("Not implemented") # and_abx
-
-    def op_39(self):
-        raise Exception("Not implemented") # and_aby
-
-    def op_21(self):
-        raise Exception("Not implemented") # and_inx
-
-    def op_31(self):
-        raise Exception("Not implemented") # and_iny
-
-    def op_0a(self):
-        raise Exception("Not implemented") # asl
-
-    def op_06(self):
-        raise Exception("Not implemented") # asl_zp
-
-    def op_16(self):
-        raise Exception("Not implemented") # asl_zpx
-
-    def op_0e(self):
-        raise Exception("Not implemented") # asl_ab
-
-    def op_1e(self):
-        raise Exception("Not implemented") # asl_abx
-
-    # bit_zp
-    def op_24(self):
-        val = self.x.read_zp()
-        self.c.z = (val & self.c.a) == 0
-        self.c.n = (val & 0x80) != 0
-        self.c.v = (val & 0x40) != 0
-
-    def op_2c(self):
-        raise Exception("Not implemented") # bit_ab
-
-    # bpl
-    def op_10(self):
-        if not self.c.n:
-            self.c.pc += self.x.signed(self.x.read_im())
-        self.c.pc += 1
-
-    # bmi
-    def op_30(self):
-        if self.c.n:
-            self.c.pc += self.x.signed(self.x.read_im())
-        self.c.pc += 1
-
-    def op_50(self):
-        raise Exception("Not implemented") # bvc
-
-    def op_70(self):
-        raise Exception("Not implemented") # bvs
-
-    # bcc
-    def op_90(self):
+    def inst_bcc(self):
         self.branch(not self.c.c)
 
-    # bcs
-    def op_b0(self):
+    def inst_bcs(self):
         self.branch(self.c.c)
 
-    # bne
-    def op_d0(self):
-        self.branch(not self.c.z)
-
-    # beq
-    def op_f0(self):
+    def inst_beq(self):
         self.branch(self.c.z)
 
-    # cmp_im
-    def op_c9(self):
-        self.c.z = (self.c.a == self.x.read_im())
+    def inst_bit(self, arg):
+        self.c.z = (arg & self.c.a) == 0
+        self.c.n = (arg & 0x80) != 0
+        self.c.v = (arg & 0x40) != 0
 
-    # cmp_zp
-    def op_c5(self):
-        self.c.z = (self.c.a == self.x.read_zp())
+    def inst_bmi(self):
+        self.branch(self.c.n)
 
-    def op_d5(self):
-        raise Exception("Not implemented") # cmp_zpx
+    def inst_bne(self):
+        self.branch(not self.c.z)
 
-    def op_cd(self):
-        raise Exception("Not implemented") # cmp_ab
+    def inst_bpl(self):
+        self.branch(not self.c.n)
 
-    def op_dd(self):
-        raise Exception("Not implemented") # cmp_abx
+    def inst_brk(self):
+        pass
 
-    def op_d9(self):
-        raise Exception("Not implemented") # cmp_aby
+    def inst_bvc(self):
+        raise Exception('Not implemented')
 
-    def op_c1(self):
-        raise Exception("Not implemented") # cmp_inx
+    def inst_bvs(self):
+        raise Exception('Not implemented')
 
-    def op_d1(self):
-        raise Exception("Not implemented") # cmp_iny
-
-    # cpx_im
-    def op_e0(self):
-        self.c.z = (self.c.x == self.x.read_im())
-
-    # cpx_zp
-    def op_e4(self):
-        self.c.z = (self.c.x == self.x.read_zp())
-
-    def op_ec(self):
-        raise Exception("Not implemented") # cpx_ab
-
-    # cpy_im
-    def op_c0(self):
-        self.c.z = (self.c.y == self.x.read_im())
-
-    # cpy_zp
-    def op_c4(self):
-        self.c.y = (self.c.y == self.x.read_zp())
-
-    def op_cc(self):
-        raise Exception("Not implemented") # cpy_ab
-
-    # dec_zp
-    def op_c6(self):
-        address = self.x.read_im()
-        self.c.mem_write(self.c.mem_read(address) - 1, address)
-
-    def op_d6(self):
-        raise Exception("Not implemented") # dec_zpx
-
-    def op_ce(self):
-        raise Exception("Not implemented") # dec_ab
-
-    def op_de(self):
-        raise Exception("Not implemented") # dec_abx
-
-    def op_49(self):
-        raise Exception("Not implemented") # eor_im
-
-    def op_45(self):
-        raise Exception("Not implemented") # eor_zp
-
-    def op_55(self):
-        raise Exception("Not implemented") # eor_zpx
-
-    def op_4d(self):
-        raise Exception("Not implemented") # eor_ab
-
-    def op_5d(self):
-        raise Exception("Not implemented") # eor_abx
-
-    def op_59(self):
-        raise Exception("Not implemented") # eor_aby
-
-    def op_41(self):
-        raise Exception("Not implemented") # eor_inx
-
-    def op_51(self):
-        raise Exception("Not implemented") # eor_iny
-
-    # clc
-    def op_18(self):
+    def inst_clc(self):
         self.c.c = False
 
-    # sec
-    def op_38(self):
-        self.c.c = True
+    def inst_cld(self):
+        raise Exception('Not implemented')
 
-    def op_58(self):
-        raise Exception("Not implemented") # cli
+    def inst_cli(self):
+        raise Exception('Not implemented')
 
-    def op_78(self):
-        raise Exception("Not implemented") # sei
+    def inst_clv(self):
+        raise Exception('Not implemented')
 
-    def op_b8(self):
-        raise Exception("Not implemented") # clv
+    def inst_cmp(self, arg):
+        self.c.z = self.c.a == arg
 
-    def op_d8(self):
-        raise Exception("Not implemented") # cld
+    def inst_cpx(self, arg):
+        self.c.z = self.c.x == arg
 
-    def op_f8(self):
-        raise Exception("Not implemented") # sed
+    def inst_cpy(self):
+        raise Exception('Not implemented')
 
-    # inc_zp
-    def op_e6(self):
-        address = self.x.read_im()
-        self.c.mem_write(self.x.result(self.c.mem_read(address) + 1), address)
+    def inst_dec(self, arg):
+        self.c.pc -= 1
+        return self.x.result(arg - 1)
 
-    def op_f6(self):
-        raise Exception("Not implemented") # inc_zpx
+    def inst_dex(self):
+        self.c.x = self.x.result(self.c.x - 1)
 
-    def op_ee(self):
-        raise Exception("Not implemented") # inc_ab
+    def inst_dey(self):
+        raise Exception('Not implemented')
 
-    def op_fe(self):
-        raise Exception("Not implemented") # inc_abx
+    def inst_eor(self):
+        raise Exception('Not implemented')
 
-    # jmp
-    def op_4c(self):
-        self.c.pc = self.x.read_double_arg()
+    def inst_inc(self, arg):
+        self.c.pc -= 1
+        return self.x.result(arg + 1)
 
-    def op_6c(self):
-        raise Exception("Not implemented") # jmp_in
+    def inst_inx(self):
+        self.c.x = self.x.result(self.c.x + 1)
 
-    # jsr
-    def op_20(self):
+    def inst_iny(self):
+        self.c.y = self.x.result(self.c.y + 1)
+
+    def inst_jmp(self):
+        self.c.pc = self.x.read_double_im()
+
+    def inst_jsr(self):
         pc = self.x.split_bytes(self.c.pc + 2)
         self.x.push(pc[1])
         self.x.push(pc[0])
-        self.c.pc = self.x.read_double_arg()
+        self.c.pc = self.x.read_double_im()
 
-    # lda_im
-    def op_a9(self):
-        self.c.a = self.x.read_im()
+    def inst_lda(self, arg):
+        self.c.a = arg
 
-    # lda_zp
-    def op_a5(self):
-        self.c.a = self.x.read_zp()
+    def inst_ldx(self, arg):
+        self.c.x = arg
 
-    # lda_zpx
-    def op_b5(self):
-        self.c.a = self.x.read_zpx()
+    def inst_ldy(self, arg):
+        self.c.y = arg
 
-    def op_ad(self):
-        raise Exception("Not implemented") # lda_ab
-
-    def op_bd(self):
-        raise Exception("Not implemented") # lda_abx
-
-    def op_b9(self):
-        raise Exception("Not implemented") # lda_aby
-
-    def op_a1(self):
-        raise Exception("Not implemented") # lda_inx
-
-    def op_b1(self):
-        raise Exception("Not implemented") # lda_iny
-
-    # ldx_im
-    def op_a2(self):
-        self.c.x = self.x.read_im()
-
-    # ldx_zp
-    def op_a6(self):
-        self.c.x = self.x.read_zp()
-
-    def op_b6(self):
-        raise Exception("Not implemented") # ldx_zpy
-
-    def op_ae(self):
-        raise Exception("Not implemented") # ldx_ab
-
-    def op_be(self):
-        raise Exception("Not implemented") # ldx_aby
-
-    # ldy_im
-    def op_a0(self):
-        self.c.y = self.x.read_im()
-
-    # ldy_zp
-    def op_a4(self):
-        self.c.y = self.x.read_zp()
-
-    def op_b4(self):
-        raise Exception("Not implemented") # ldy_zpx
-
-    def op_ac(self):
-        raise Exception("Not implemented") # ldy_ab
-
-    def op_bc(self):
-        raise Exception("Not implemented") # ldy_abx
-
-    # lsr
-    def op_4a(self):
+    def inst_lsr(self):
         self.c.c = self.c.a & 1 == 1
         self.c.a = self.c.a >> 1
 
-    def op_46(self):
-        raise Exception("Not implemented") # lsr_zp
-
-    def op_56(self):
-        raise Exception("Not implemented") # lsr_zpx
-
-    def op_4e(self):
-        raise Exception("Not implemented") # lsr_ab
-
-    def op_5e(self):
-        raise Exception("Not implemented") # lsr_abx
-
-    # nop
-    def op_ea(self):
+    def inst_nop(self):
         time.sleep(0.01)
 
-    def op_09(self):
-        raise Exception("Not implemented") # ora_im
+    def inst_ora(self):
+        raise Exception('Not implemented')
 
-    def op_05(self):
-        raise Exception("Not implemented") # ora_zp
+    def inst_pha(self):
+        self.x.push(self.c.a)
 
-    def op_15(self):
-        raise Exception("Not implemented") # ora_zpx
+    def inst_php(self):
+        raise Exception('Not implemented')
 
-    def op_0d(self):
-        raise Exception("Not implemented") # ora_ab
+    def inst_pla(self):
+        self.c.a = self.x.pull()
 
-    def op_1d(self):
-        raise Exception("Not implemented") # ora_abx
+    def inst_plp(self):
+        raise Exception('Not implemented')
 
-    def op_19(self):
-        raise Exception("Not implemented") # ora_aby
+    def inst_rol(self):
+        raise Exception('Not implemented')
 
-    def op_01(self):
-        raise Exception("Not implemented") # ora_inx
+    def inst_ror(self):
+        raise Exception('Not implemented')
 
-    def op_11(self):
-        raise Exception("Not implemented") # ora_iny
+    def inst_rti(self):
+        raise Exception('Not implemented')
 
-    # tax
-    def op_aa(self):
-        self.c.x = self.c.a
-
-    # txa
-    def op_8a(self):
-        self.c.a = self.c.x
-
-    # dex
-    def op_ca(self):
-        self.c.x -= 1
-        self.c.n = self.c.x < 0
-        self.c.x &= 0xff
-        self.c.z = self.c.x == 0
-
-    # inx
-    def op_e8(self):
-        self.c.x += 1
-
-    def op_a8(self):
-        raise Exception("Not implemented") # tay
-
-    # tya
-    def op_98(self):
-        self.c.a = self.c.y
-
-    def op_88(self):
-        raise Exception("Not implemented") # dey
-
-    # iny
-    def op_c8(self):
-        self.x.set('y', self.c.y + 1)
-
-    def op_2a(self):
-        raise Exception("Not implemented") # rol
-
-    def op_26(self):
-        raise Exception("Not implemented") # rol_zp
-
-    def op_36(self):
-        raise Exception("Not implemented") # rol_zpx
-
-    def op_2e(self):
-        raise Exception("Not implemented") # rol_ab
-
-    def op_3e(self):
-        raise Exception("Not implemented") # rol_abx
-
-    def op_6a(self):
-        raise Exception("Not implemented") # ror
-
-    def op_66(self):
-        raise Exception("Not implemented") # ror_zp
-
-    def op_76(self):
-        raise Exception("Not implemented") # ror_zpx
-
-    def op_6e(self):
-        raise Exception("Not implemented") # ror_ab
-
-    def op_7e(self):
-        raise Exception("Not implemented") # ror_abx
-
-    def op_40(self):
-        raise Exception("Not implemented") # rti
-
-    # rts
-    def op_60(self):
+    def inst_rts(self):
         self.c.pc = self.x.read_two_bytes(self.c.stack_top + self.c.sp + 1)
         self.x.pull()
         self.x.pull()
 
-    def sbc(self, what):
-        result = self.c.a - what - (0 if self.c.c else 1)
+    def inst_sbc(self, arg):
+        result = self.c.a - arg - (0 if self.c.c else 1)
         self.c.c = result >= 0
-        self.x.set('a', result)
+        self.c.a = self.x.result(result)
 
-    # sbc_im
-    def op_e9(self):
-        self.sbc(self.x.read_im())
+    def inst_sec(self):
+        self.c.c = True
 
-    # sbc_zp
-    def op_e5(self):
-        self.sbc(self.x.read_zp())
+    def inst_sed(self):
+        raise Exception('Not implemented')
 
-    def op_f5(self):
-        raise Exception("Not implemented") # sbc_zpx
+    def inst_sei(self):
+        raise Exception('Not implemented')
 
-    # sbc_ab
-    def op_ed(self):
-        self.sbc(self.x.read_ab())
+    def inst_sta(self):
+        return self.c.a
 
-    def op_fd(self):
-        raise Exception("Not implemented") # sbc_abx
+    def inst_stx(self):
+        return self.c.x
 
-    def op_f9(self):
-        raise Exception("Not implemented") # sbc_aby
+    def inst_sty(self):
+        return self.c.y
 
-    def op_e1(self):
-        raise Exception("Not implemented") # sbc_inx
+    def inst_tax(self):
+        self.c.x = self.c.a
 
-    def op_f1(self):
-        raise Exception("Not implemented") # sbc_iny
+    def inst_tay(self):
+        raise Exception('Not implemented')
 
-    # sta_zp
-    def op_85(self):
-        self.x.write_zp(self.c.a)
+    def inst_tsx(self):
+        raise Exception('Not implemented')
 
-    # sta_zpx
-    def op_95(self):
-        self.x.write_zpx(self.c.a)
+    def inst_txa(self):
+        self.c.a = self.c.x
 
-    # sta_ab
-    def op_8d(self):
-        self.x.write_ab(self.c.a)
+    def inst_txs(self):
+        raise Exception('Not implemented')
 
-    # sta_abx
-    def op_9d(self):
-        self.x.write_abx(self.c.a)
+    def inst_tya(self):
+        self.c.a = self.c.y
 
-    # sta_aby
-    def op_99(self):
-        self.x.write_aby(self.c.a)
-
-    # sta_inx
-    def op_81(self):
-        self.x.write_inx(self.c.a)
-
-    # sta_iny
-    def op_91(self):
-        self.x.write_iny(self.c.a)
-
-    def op_9a(self):
-        raise Exception("Not implemented") # txs
-
-    def op_ba(self):
-        raise Exception("Not implemented") # tsx
-
-    # pha
-    def op_48(self):
-        self.x.push(self.c.a)
-
-    # pla
-    def op_68(self):
-        self.c.a = self.x.pull()
-
-    def op_08(self):
-        raise Exception("Not implemented") # php
-
-    def op_28(self):
-        raise Exception("Not implemented") # plp
-
-    # stx_zp
-    def op_86(self):
-        self.x.write_zp(self.c.x)
-
-    def op_96(self):
-        raise Exception("Not implemented") # stx
-
-    # stx_ab
-    def op_8e(self):
-        self.x.write_ab(self.c.x)
-
-    # sty_zp
-    def op_84(self):
-        self.x.write_zp(self.c.y)
-
-    def op_94(self):
-        raise Exception("Not implemented") # sty_zpx
-
-    def op_8c(self):
-        raise Exception("Not implemented") # sty_ab
+    def adc(self, what):
+        result = self.c.a + what + (1 if self.c.c else 0)
+        self.c.c = result > 0xff
+        self.c.a = self.x.result(result)

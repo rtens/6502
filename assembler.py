@@ -72,11 +72,12 @@ class Assembler:
             args = []
             mode = 'a'
         else:
-            mode = ''
             if op in ['jmp', 'jsr']:
+                mode = 'ab'
                 self.absolutes.append(pc + 1)
                 args = [arg, arg]
             else:
+                mode = 'im'
                 self.relatives.append(pc + 1)
                 args = [arg]
 

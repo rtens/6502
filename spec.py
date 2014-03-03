@@ -86,6 +86,10 @@ class OperationsTest(unittest.TestCase):
         c = self.x('LDX #$01 LDA #$1b STA $01,X INX STA $01,X DEX STA $ff,X', 4)
         self.assertEqual(c.mem[0:4], [0, 27, 27, 27])
 
+    def test_addressing_absolute(self):
+        c = self.x('LDX #$01 STX $01ff', 0x200)
+        self.assertEqual(c.mem[0x1ff], 1)
+
     def test_absolute_x_and_y(self):
         c = self.x('LDX #$01 LDY #$02 LDA #$1b STA $0001,X STA $0001,Y', 4)
         self.assertEqual(c.mem[0:4], [0, 0, 27, 27])
