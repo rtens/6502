@@ -12,6 +12,17 @@ class RandomNumberGenerator:
     def read(self, where):
         return random.randint(0, 0xff)
 
+class Out:
+
+    def register(self, controller, where):
+        controller.vmem[where] = self
+
+    def read(self, where):
+        return 0
+
+    def write(self, what, where):
+        print(what)
+
 class BitmapDisplay:
 
     def __init__(self, width, height, pixel_size = 10):
