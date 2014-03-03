@@ -14,6 +14,10 @@ class RandomNumberGenerator:
 
 class Out:
 
+    def __init__(self):
+        self.buffer = []
+        threading.Thread(target=self.print).start()
+
     def register(self, controller, where):
         controller.vmem[where] = self
 
@@ -21,7 +25,13 @@ class Out:
         return 0
 
     def write(self, what, where):
-        print(what)
+        self.buffer.insert(0, what)
+
+    def print(self):
+        while True:
+            while len(self.buffer) != 0:
+                print(self.buffer.pop())
+            time.sleep(0.01)
 
 class BitmapDisplay:
 
